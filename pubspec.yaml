@@ -1,0 +1,17 @@
+name: flowcheck
+description: 파일 무결성 모니터 — 해시 기반 변조 감지, 증분 스캔, 베이스라인 diff.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  crypto: ^3.0.0
+
+executables:
+  flowcheck: flowcheck
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^4.0.0
