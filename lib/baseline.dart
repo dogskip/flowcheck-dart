@@ -134,4 +134,25 @@ class BaselineDiff {
     buf.writeln('Status: ${isClean ? "CLEAN" : "CHANGED"}');
     return buf.toString();
   }
+
+  /// 기계 판독용 JSON 보고서.
+  ///
+  /// CI/CD 파이프라인이나 모니터링 시스템에서 diff를 파싱할 때 쓴다.
+  /// 각 변경 유형별로 파일 목록과 메타데이터를 포함한다.
+  Map<String, dynamic> toJson() => {
+        'status': isClean ? 'CLEAN' : 'CHANGED',
+        'totalChanges': changeCount,
+        'added': added.map((e) => e.toJson()).toList(),
+        'removed': removed.map((e) => e.toJson()).toList(),
+        'modified': modified.map((e) => e.toJson()).toList(),
+        'metadataChanged': metadataChanged.map((e) => e.toJson()).toList(),
+      };
+
+  /// JSON 문자열 보고서.
+  ///
+  /// [JsonEncoder]로 들여쓰기 적용. 사람이 읽기 좋은 형태.
+  String toJsonReport() {
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(toJson());
+  }
 }
