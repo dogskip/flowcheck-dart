@@ -28,6 +28,31 @@ class Scanner {
     return baseline;
   }
 
+  /// 증분 스캔.
+  ///
+  /// 기존 베이스라인과 비교해 메타데이터(크기, 수정 시각)가 변경된
+  /// 파일만 해시를 재계산한다. 메타데이터가 동일하면 내용도 동일하다고
+  /// 간주해 기존 해시를 재사용한다. 이는 대규모 디렉토리에서 해시
+  /// 계산 비용을 크게 줄인다.
+  ///
+  /// 보안: 메타데이터만으로는 변조를 확신할 수 없으므로, 신뢰할 수 없는
+  /// 환경에서는 [forceFullScan] 옵션으로 전체 재해싱을 강제해야 한다.
+  Future<Baseline> incrementalScan(
+    Baseline previous, {
+    bool forceFullScan = false,
+  }) async {
+    final rootAbs = PathSecurity.validateInsideRoot(root, root);
+    final baseline = Baseline.empty(rootAbs);
+
+    await _scanDirIncremental(
+      Directory(rootAbs),
+      baseline,
+      previous,
+      forceFullScan,
+    );
+    return baseline;
+  }
+
   Future<void> _scanDir(Directory dir, Baseline baseline) async {
     if (!dir.existsSync()) {
       throw FileSystemException('directory not found', dir.path);
@@ -53,6 +78,54 @@ class Scanner {
         baseline.upsert(entry);
       } catch (e) {
         // 권한 오류 등은 건너뜀. 로그만.
+        stderr.writeln('warning: skipping ${entity.path}: $e');
+      }
+    }
+  }
+
+  Future<void> _scanDirIncremental(
+    Directory dir,
+    Baseline baseline,
+    Baseline previous,
+    bool forceFullScan,
+  ) async {
+    if (!dir.existsSync()) {
+      throw FileSystemException('directory not found', dir.path);
+    }
+
+    final stream = dir.list(recursive: true, followLinks: followSymlinks);
+    await for (final entity in stream) {
+      try {
+        PathSecurity.validateInsideRoot(entity.path, root);
+      } on PathTraversalException {
+        continue;
+      } on SymlinkLoopException {
+        continue;
+      }
+
+      if (entity is! File) continue;
+      if (_isExcluded(entity.path)) continue;
+
+      try {
+        final stat = entity.statSync();
+        final old = previous.get(entity.path);
+
+        if (!forceFullScan && old != null) {
+          // 메타데이터가 동일하면 해시 재사용.
+          if (old.size == stat.size && old.modified == stat.modified) {
+            baseline.upsert(FileEntry(
+              path: entity.path,
+              size: stat.size,
+              modified: stat.modified,
+              hash: old.hash,
+            ));
+            continue;
+          }
+        }
+        // 메타데이터가 다르거나 신규 파일이면 해시 재계산.
+        final entry = await _hashFile(entity);
+        baseline.upsert(entry);
+      } catch (e) {
         stderr.writeln('warning: skipping ${entity.path}: $e');
       }
     }
