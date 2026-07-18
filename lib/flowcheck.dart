@@ -8,4 +8,5 @@ library flowcheck;
 export 'hash.dart';
 export 'security.dart';
 export 'baseline.dart';
+export 'ignore_patterns.dart';
 export 'scanner.dart';
